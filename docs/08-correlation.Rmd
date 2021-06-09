@@ -1,0 +1,528 @@
+---
+title: "Data Science 2"
+subtitle: "8 - Korrelation"
+author: "Saskia Otto"
+date: "SoSe2021"
+output:
+  UHHformats::html_lecture:
+    logo: "images/uhh_logo.png"
+    cover: "images/larson_c.jpg" 
+    logo_small: "images/uhh_logo_notext.png"
+    footer: "[Data Science 2](https://saskiaotto.github.io/bio-bsc-data-science-2/)"
+    widescreen: true
+    smaller: true
+    toc: "Folienübersicht"
+    css: "./css/styles.css"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+## Global options
+options(max.print="10")
+knitr::opts_chunk$set(cache=FALSE, echo=FALSE, prompt=FALSE,
+  message=FALSE, warning=FALSE, error=FALSE)
+# Set decimals:
+inline_hook <- function (x) {
+  if (is.numeric(x)) {
+    # ifelse does a vectorized comparison
+    # If integer, print without decimal; otherwise print two places
+    res <- ifelse(x == round(x),
+      sprintf("%d", x),
+      sprintf("%.2f", x)
+    )
+    paste(res, collapse = ", ")
+  }
+}
+knitr::knit_hooks$set(inline = inline_hook)
+```
+
+```{r load_libraries, echo=FALSE, cache=FALSE}
+library(knitr)
+library(tidyverse)
+library(corrplot) 
+```
+
+# Korrelation {.segue-icon}
+![](images/ds_comps/ds_comp4.png)
+
+## Auf Zusammenhänge testen
+
+```{r, echo=FALSE, out.width="100%"}
+knitr::include_graphics("images/classic_tests/classic_tests_overview.png")
+```
+
+<img style="height:105px; width:130px; position:absolute; right:175px; bottom:232px" src="images/classic_tests/classic_tests_green_square.png">
+
+<img style="height:105px; width:130px; position:absolute; right:175px; bottom:130px" src="images/classic_tests/classic_tests_red_square.png">
+
+
+## Korrelation vs. Regression
+
+### Korrelation {.box-6 .bg-yellow .stretch} 
+- Prüfen von Beziehungen **ohne** Kausalität.
+- Das Skalenniveau kann **ordinal** oder **metrisch** sein.
+- Beide Variablen sind zufällige Variablen, es wird keine manipuliert.
+- Je nach Skalenniveau und Verteilung wird der Korrelationstyp gewählt.
+
+### Regression {.box-6 .bg-yellow .outline .stretch} 
+- Prüfen von Beziehungen **mit** Kausalität.
+- Beide Variablen müssen **metrisch** sein.
+- Unterscheidet in
+    - Abhängige oder Antwortvariable Y
+    - Unabhängige oder erklärende Variable X; diese wird meist manipuliert.
+
+
+## Charakterisierung bivariater Beziehungen
+
+### {.col-5 .large}
+<br>
+
+- Form (linear, nicht-linear, quadratisch)
+- Richtung (positiv, negativ)
+- Stärke (wie viel Streuung/Rauschen?)
+- Ausreißer
+
+### {.col-7}
+```{r}
+knitr::include_graphics("images/corr/corr_types2.png")
+```
+
+
+## Die Form
+
+- Zur Berechnung der Korrelation ist eine **lineare Beziehung erforderlich**.
+- Die Beziehung zwischen zwei Variablen ist allerdings **oft nicht linear**!
+- **Transformation** einer oder beider Variablen kann die Beziehung linearisieren.
+- **ggplot2** bietet mehrere verschiedene Darstellungsmöglichkeiten transformierter Beziehungen (**ohne** die **Rohdaten** zu **transformieren**):
+    - `coord_trans()` transformiert die Koordinaten des Plots entsprechend der angegebenen Transformation.
+    - `scale_x_log10()` und `scale_y_log10()` log-transformiert die X- und Y-Achse zur Basis 10.
+
+
+## Die Form | Streudiagramm der Rohdaten
+
+Hier ein Beispiel des möglichen Zusammenhangs zwischen dem Körpergewicht (in kg) und der Gehirnmasse (in g) von Säugetieren (Datensatz `mammals` aus dem Paket 'MASS'):
+
+### {.col-6}
+```{r, echo=TRUE, eval=FALSE}
+MASS::mammals %>%
+ggplot(aes(x = body, y = brain)) + 
+  geom_point() 
+```
+
+### {.col-6}
+```{r, echo=FALSE, fig.height=5, fig.width=5, fig.align='center'}
+ggplot(MASS::mammals, aes(x = body, y = brain)) + 
+  geom_point(size = 3) +
+  theme(
+    text = element_text(size = 15),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+```
+
+
+## Die Form | Streudiagramm mit `coord_trans()`
+
+### {.col-6}
+```{r, echo=TRUE, eval=FALSE}
+MASS::mammals %>%
+ggplot(aes(x = body, y = brain)) + 
+  geom_point() +
+  coord_trans(x = "log10", y = "log10")
+```
+
+### {.col-6}
+```{r, echo=FALSE, fig.height=5, fig.width=5, fig.align='center'}
+ggplot(MASS::mammals, aes(x = body, y = brain)) + 
+  geom_point(size = 3) +
+  coord_trans(x = "log10", y = "log10") +
+  theme(
+    text = element_text(size = 15),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+```
+
+
+## Die Form | Streudiagramm mit `scale_x/y_log10()`
+
+### {.col-6}
+```{r, echo=TRUE, eval=FALSE}
+MASS::mammals %>%
+ggplot(aes(x = body, y = brain)) + 
+  geom_point() +
+  scale_x_log10() + scale_y_log10()
+```
+
+### {.col-6}
+```{r, echo=FALSE, fig.height=5, fig.width=5, fig.align='center'}
+ggplot(MASS::mammals, aes(x = body, y = brain)) + 
+  geom_point(size = 3) +
+  scale_x_log10() + scale_y_log10() +
+  theme(
+    text = element_text(size = 15),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+```
+
+
+## Quantifizierung der Stärke und Richtung von bivariaten Beziehungen
+
+- Messgröße: **Korrelationskoeffizient**
+- Wertebereich: **-1 bis +1**
+    - Das **Vorzeichen** gibt die **Richtung** der Beziehung an.
+    - Der **Betrag** die **Stärke**
+      - 0 = keine Korrelation
+      - -1 = starke negative Korrelation
+      - +1 starke positive Korrelation
+
+### {.box-9 .offset-1 .bg-red .icon-small-l}
+![](images/icons/flash.png)
+→ Dies gilt allerdings nur bei **linearen Zusammenhängen**!
+
+
+## Verschiedene Arten von Beziehungen | 1
+
+- positiv, linear, moderate Streuung
+
+```{r, fig.align='center'}
+set.seed(21)
+df <- data.frame(
+  x = runif(30, 5, 35)
+  ) %>%
+  mutate(y = 100 +5*x +rnorm(30, 0, 50))
+
+ggplot(df, aes(x, y)) +
+  geom_point(size = 3, color = "#E3731A") +
+  xlab("X") + ylab("Y") +
+  ggtitle(paste0("Korrelation: ", round(cor(df$x, df$y), 2))) +
+  theme(text = element_text(size = 15))
+```
+
+
+## Verschiedene Arten von Beziehungen | 2
+
+- nicht-linear (perfekte Beziehung, keine Streuung) 
+
+```{r, fig.align='center'}
+set.seed(123)
+df <- data.frame(
+  x = runif(30, -10, 10)
+  ) %>%
+  mutate(y = 100-x^2, x = x+15)
+
+ggplot(df, aes(x, y)) +
+  geom_point(size = 3, color = "#E3731A") +
+  xlab("X") + ylab("Y") + xlim(5, 20) +
+  ggtitle(paste0("Korrelation: ", round(cor(df$x, df$y), 2), " (eigentlich nicht anwendbar)")) +
+  theme(text = element_text(size = 15))
+```
+
+
+## Verschiedene Arten von Beziehungen  | 3
+
+- perfekt linear mit Ausreißern
+
+```{r, fig.align='center'}
+set.seed(21)
+df <- data.frame(
+  x = runif(30, 5, 35)
+  ) %>%
+  mutate(y = 100 +0.5*x)
+df2 <- data.frame(x = c(8, 32), y = c(114, 106))
+
+ggplot(df, aes(x, y)) +
+  geom_point(size = 3, color = "#E3731A") +
+  geom_point(df2, mapping = aes(x,y), size = 3, color = "#1F7A1F") +
+  xlab("X") + ylab("Y") +
+  ggtitle(paste0("Korrelation: ", round(cor(c(df$x, df2$x), c(df$y, df2$y)), 2))) +
+  theme(text = element_text(size = 15))
+```
+
+
+## Verschiedene Arten von Beziehungen  | 4
+
+- keine Beziehung
+
+```{r, fig.align='center'}
+set.seed(1)
+df <- data.frame(
+  x = runif(30, 5, 35)
+  ) %>%
+  mutate(y = rnorm(30, 0, 50))
+df2 <- data.frame(x = c(8, 32), y = c(114, 106))
+
+ggplot(df, aes(x, y)) +
+  geom_point(size = 3, color = "#E3731A") +
+  xlab("X") + ylab("Y") +
+  ggtitle(paste0("Korrelation: ", round(cor(df$x, df$y), 2))) +
+  theme(text = element_text(size = 15))
+```
+
+
+## Korrelationsspiel
+
+Mal sehen, wie gut Euer "Bauchgefühl" über die Richtung und Stärke einer Korrelation ist:
+
+<div class="wrapper">
+  <iframe class="zoom90" src="https://saskiaotto.de/shiny/correlation/"></iframe>
+</div>
+
+<div class="source-img footer-right">Link:<a href="https://saskiaotto.de/shiny/correlation/">https://saskiaotto.de/shiny/correlation/</a></div>
+
+
+## Ursache-Wirkung
+
+Negative Korrelation (Beziehung) zwischen der Napfschneckenabundanz und dem Grad der Algenbedeckung → Was könnte die Ursache sein?
+
+### Möglichkeit 1{.col-6 .small}
+```{r, fig.width=3, fig.height=3, fig.align='center'}
+set.seed(21)
+df <- data.frame(
+  x = runif(10, 5, 20)
+  ) %>%
+  mutate(y = 1000 -5*x +rnorm(10, 0, 20))
+
+ggplot(df, aes(x, y)) +
+  geom_point(size = 3, color = "#027BCB") +
+  xlab("Napfschneckenabundanz") +
+  ylab("Algenbedeckung") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    text = element_text(size = 15)
+  )
+```
+→ Eine höhere Napfschneckenzahl 'verursacht' eine geringere Algenbedeckung durch Wegfraß.
+
+### Möglichkeit 2 {.col-6 .small}
+```{r, fig.width=3, fig.height=3, fig.align='center'}
+ggplot(df, aes(x = y, y = x)) +
+  geom_point(size = 3, color = "#027BCB") +
+  ylab("Napfschneckenabundanz") +
+  xlab("Algenbedeckung") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    text = element_text(size = 15)
+  )
+```
+→ Ein hoher Algenbewuchs 'verursacht' eine geringere Napfschneckenzahl durch Konkurrenz um Platz.
+
+
+## How Ice Cream Kills! Correlation vs. Causation 
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/VMUQSMFGBDo?start=30" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<div class="source-img footer-right">Videolink: <a href="https://youtu.be/VMUQSMFGBDo">https://youtu.be/VMUQSMFGBDo</a></div>
+
+
+# Korrelationskoeffizienten {.segue-icon}
+![](images/ds_comps/ds_comp4.png)
+
+
+## Streuungsparameter für 1 vs. 2 Variablen
+
+### (korrigierte) Varianz von *X* {.box-6 .bg-gray .large .stretch}
+
+$$s^{2} = \frac{1}{n-1}\sum\limits_{i=1}^{n}(x_{i} - \bar{x})^2$$
+
+### Standardabweichungvon *X* {.box-6 .bg-gray .large .stretch}
+
+$$s=\sqrt{s^{2}}$$
+
+### Kovarianz zwischen *X* und *Y* {.box-8 .offset-2 .bg-yellow .large}
+
+$$Cov(x,y)=\frac{1}{n-1}\sum\limits_{i=1}^{n}(x_i- \bar{x})(y_i- \bar{y})$$
+
+
+## Kovarianz | Grafik
+
+```{r, out.width="70%", fig.align='center'}
+knitr::include_graphics("images/corr/corr_covariance.png")
+```
+
+
+## Standardisierung der Kovarianz {.build}
+
+### Kovarianz {.box-6 .bg-yellow .outline .stretch}
+- Ein Maß für die Stärke einer linearen Beziehung
+- Einschränkung: absolute Größe hängt von den Einheiten der beiden Variablen ab.
+
+$$Cov(X,Y)=\frac{1}{n-1}\sum\limits_{i=1}^{n}(x_i- \bar{x})(y_i- \bar{y})$$
+
+### Lösung: Maximale Kovarianz {.box-6 .bg-yellow .outline .stretch}
+- **Standardisierung** der Kovarianz mit den **beiden Standardabweichungen**, so dass das Maß der Stärke zwischen -1 und +1 liegt
+    - → Pearson Produkt-Moment-Korrelationskoeffizient
+
+$$ Cov(x,y)_{max} = s_x*s_y$$
+
+
+## Parametrischer Korrelationskoeffizient
+
+### Pearson Produkt-Moment-Korrelationskoeffizient $\rho$ {.box-12 .bg-red .outline}
+- Der Korrelationskoeffizient r (bzw. $\rho$ für die Population) wird durch das Verhältnis zwischen der Kovarianz und der maximalen Kovarianz quantifiziert:
+
+$$r_{x,y} = \frac{Cov(x,y)}{Cov(x,y)_{max}} = \frac{\frac{1}{n-1}\sum\limits_{i=1}^{n}(x_i- \bar{x})(y_i- \bar{y})}{s_x*s_y}$$
+
+- $r = \sqrt{R^2}$ → r ist die Quadratwurzel des "Bestimmtheitsmaßes" $R^2$
+- $r = [-1,+1]$ → $R^2$ ist immer positiv, während $r$ die Richtung des Zusammenhangs angibt!
+
+
+## Nichtparametrischer Korrelationskoeffizient | 1
+
+### Spearman’scher Rangkorrelationskoeffizient $\rho$ {.box-12 .bg-green .outline}
+- Rohwerte $x_i$, $y_i$ werden in Ränge $X_i$, $Y_i$ umgewandelt.
+- Differenzen zwischen den Rängen der einzelnen Beobachtungen der beiden Variablen werden berechnet: $D_i = X_i - Y_i$
+- $r_s$ ist dann gegeben durch: 
+
+$$r_s = 1-\frac{6\sum D_i^2}{n(n^2-1)}~~~\text{mit n = Anzahl der Rangpaare}$$
+
+- Analog zum Pearson Korrelationskoeffizienten liegt $r_s$ zwischen -1 und 1 und das Vorzeichen zeigt eine positive oder negative Korrelation an.
+
+
+## Nichtparametrischer Korrelationskoeffizient | 2
+
+### Kendall’sches Tau $\tau$ {.box-12 .bg-green .outline}
+- Im Gegensatz zum Spearman'schen $\rho$ nutzt das Kendall’sche $\tau$  nur den Unterschied in den Rängen und nicht die Differenz der Ränge. In der Regel ist der Wert des Kendall'schen $\tau$ etwas kleiner als der Wert des Spearman'schen $\rho$. 
+- $\tau$ erweist sich darüber hinaus auch für intervallskalierte Daten als hilfreich, wenn die Daten nicht normalverteilt sind, die Skalen ungleiche Teilungen aufweisen oder bei sehr kleinen Stichprobengrößen.
+
+
+# Korrelationen in R {.segue-icon}
+![](images/ds_comps/ds_comp4.png)
+
+
+## Pearson Korrelation in R | Vektoren
+
+```{r, echo=TRUE, eval=FALSE, title="Syntax"}
+cor(x, y, method = "pearson")
+# oder alternativ (weil 'pearson' Standard ist):
+cor(x, y)
+```
+
+- `x` und `y` sind in diesem Falle einzelne Vektoren.
+
+```{r, echo=TRUE, title="Beispiel iris"}
+cor(x = iris$Sepal.Length, y = iris$Sepal.Width)
+```
+
+## Pearson Korrelation in R | Matrizen & data frames
+
+- Es können aber auch ganze Matrizen und data frames an `x` bzw. `x` und `y` übergeben werden (beide müssen numerisch sein!).
+    - → dann wird der Korrelationskoeffizient für alle paarweisen Vergleiche der Variablen ausgegeben: 
+
+```{r, echo=TRUE, title="Beispiel iris"}
+cor(x = iris[ ,1:4]) # wichtig: ohne 'species'
+```
+
+
+## Pearson Korrelationstest
+
+Um zu testen, ob die Beziehung signifikant ist, kann die Funktion `cor()` erweitert werden zu `cor.test()`:
+
+### {.col-6}
+```{r, echo=TRUE, eval=FALSE, title="Syntax"}
+cor.test(x, y, method = "pearson") 
+# oder einfach nur 
+cor.test(x, y)
+```
+
+- H0: $\rho$ ist gleich Null
+- Durchführung eines *t*-Test mit der Kenngröße $t = \frac{r}{s_r}$ und den Freiheitsgraden $n-2$
+
+### {.col-6}
+```{r, echo=TRUE, eval=TRUE, title="Beispiel iris"}
+cor.test(x = iris$Sepal.Length, y = iris$Sepal.Width)
+```
+
+
+## Nichtparametrische Korrelationskoeffizienten in R
+
+### {.col-6}
+```{r, echo=TRUE}
+sl <- iris$Sepal.Length
+sw <- iris$Sepal.Width
+cor(x = sl, y = sw, method = "pearson")
+cor(x = sl, y = sw, method = "spearman")
+cor(x = sl, y = sw, method = "kendall")
+```
+
+### {.col-6}
+```{r, echo=TRUE}
+cor.test(x = sl, y = sw, method = "spearman")
+cor.test(x = sl, y = sw, method = "kendall")
+```
+
+
+## Handling von fehlenden Werten
+
+- Argument `use` → wähle hier 'pairwise.complete.obs' um die paarweisen Werte zu entfernen wenn ein NA vorkommt.
+
+```{r, echo=TRUE}
+sl[1] <- NA
+cor(x = sl, y = sw, method = "pearson")
+cor(x = sl, y = sw, method = "pearson", use = "pairwise.complete.obs")
+```
+
+
+## Visualisierung vieler Beziehungen
+
+### Das 'corrplot'-Paket 
+
+- Vignette: https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html
+- Grafische Darstellung einer Korrelationsmatrix.
+- Enthält einige Algorithmen, um die Matrix umzuordnen.
+- Erlaubt viele Detaileinstellungen, einschließlich Farbwahl, Textbeschriftungen, Farblabels, Layout, etc.
+- 7 Visualisierungsmethoden: "circle", "square", "ellipse", "number", "shade", "color", "pie"
+- Positive Korrelationen werden in blauer und negative Korrelationen in roter Farbe dargestellt.
+- Die Farbintensität und die Größe des Kreises sind proportional zu den Korrelationskoeffizienten.
+
+## `corrplot` Beispiel
+
+### {.col-5}
+```{r, echo=TRUE, eval=FALSE, title="Syntax"}
+library(corrplot) 
+?corrplot
+M <- cor(iris[ ,1:4]) 
+corrplot(M, method = "circle")
+```
+
+### {.col-7}
+```{r, eval=TRUE, fig.width=6, fig.height=6, fig.align='center'}
+M <- cor(iris[ ,1:4]) 
+corrplot(M, method = "circle")
+```
+
+
+
+
+# Fragen? {end-slide=TRUE}
+
+<div id="logo"><img src="images/uhh_logo.png"/></div>
+
+<div id="contact" class="auto-fadein">
+  Bei weiteren Fragen: saskia.otto(at)uni-hamburg.de
+</div>
+      
+<div id="license" class="auto-fadein">
+  <p>
+    <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+      <img alt="Creative Commons License" style="border-width:0"
+        src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a><br>
+        This work is licensed under a <a rel="license" 
+          href="http://creativecommons.org/licenses/by-sa/4.0/">
+        Creative Commons Attribution-ShareAlike 4.0 International License </a>
+     except for the borrowed and mentioned with proper <i>source:</i> statements.<br>
+  </p>
+  <p id=source-cover>
+      <em>Image on title and end slide:</em> Section of an infrared satellite image showing the Larsen C 
+      ice shelf on the Antarctic Peninsula - USGS/NASA Landsat: 
+      <a href="https://landsat.visibleearth.nasa.gov/view.php?id=90481">A Crack of Light in the Polar Dark</a>, 
+      Landsat 8 - TIRS, June 17, 2017 (under CC0 license)
+  </p>
+</div>
+
+
