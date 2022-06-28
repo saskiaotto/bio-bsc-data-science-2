@@ -14,8 +14,6 @@ HTMLWidgets.widget({
 
         // --------------- Get questions from R function and all other variables --------
 
-        // var cleanedString = qString.replace(/'/g, '"');
-        // var quizQuestions = JSON.parse(cleanedString);
         var quizQuestions = JSON.parse(x.questions);
 
         // Get ID from htmlwidget container
